@@ -1,1 +1,3 @@
-# AIoT
+# 基于RDK X5的巡航船系统设计与海洋信息处理优化
+该代码模块主要包括LSTM预测与鱼病识别
+RetinaNet与EfficientDet算法还在测试修改当中，预计之后上传
