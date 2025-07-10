@@ -12,10 +12,19 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained(path)
 
-prompt =input("Please enter your prompt: ")
+prompt =input("Enter the problem you want to solve:")
+text = input("Please enter the basis or material of the question: ")
+
+
 
 messages = [
-    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "system", "content": """
+     
+    context:This marine ranch, situated along the subtropical and temperate coastal zones, employs a cage culture system in waters ranging from 5 to 15 meters deep. The tidal currents significantly influence the environment, with salinity fluctuations between 25‰ and 32‰. During the recent summer heatwave, water temperatures consistently hovered between 28-30℃ Celsius. Some fish cages exhibited symptoms including sluggish movement, reduced appetite, and pinpoint hemorrhages on their skin, resulting in a mortality rate of approximately 3% that continues to rise. The ranch operators lack professional fish disease diagnosis expertise and previously relied on irregular inspections by local veterinarians. To meet market demand, the stocking density has been increased by 20% compared to spring levels.
+    text:You are an expert on Marine ranching. Based on authoritative materials related to offshore aquaculture and fish disease diagnosis, please answer the questions according to the context.
+    input_data:You are given a question and some context information, please answer the question based on the context information.
+    output_format:Your answer should be in plain text, do not use any special characters such as #, *, etc.In addition, the answer needs to be output in Chinese text.The problem is output in a three-tier structure of "problem location-solution-implementation tool"
+        """},
     {"role": "user", "content": prompt}
 ]
 text = tokenizer.apply_chat_template(

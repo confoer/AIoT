@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>海洋牧场监测大屏</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts @5.4.3/dist/echarts.min.js"></script>
+  <script src="https://cdn.socket.io/4.0.1/socket.io.min.js "></script>
+  <style>
+    :root {
+      --primary: #165DFF;
+      --secondary: #36CFC9;
+      --dark-bg: #0F172A;
+      --card-bg: #1E293B;
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --border-radius: 12px;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--dark-bg);
+      color: var(--text-primary);
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .dashboard-title {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 30px;
+      color: var(--text-primary);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      grid-template-rows: auto 300px auto;
+      gap: 20px;
+      height: calc(100vh - 100px);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 30px rgba(22, 93, 255, 0.2);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(22, 93, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+    }
+
+    .data-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 10px 0;
+      color: var(--text-primary);
+    }
+
+    .data-unit {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .chart-container {
+      width: 100%;
+      height: calc(100% - 40px);
+    }
+
+    .chart-container-small {
+      height: 80px;
+      margin-top: 10px;
+    }
+
+    .bottom-panel {
+      grid-column: span 3;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 1200px) {
+      .main-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+      }
+
+      .bottom-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="dashboard-title">海洋牧场监测大屏</h1>
+  <div class="main-container">
+    <!-- 左侧数据面板 -->
+    <div class="left-panel">
+      <!-- 水压卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">水压</span>
+          <div class="card-icon">🌊</div>
+        </div>
+        <span class="data-value" id="pressureValue">--</span>
+        <div class="chart-container-small" id="pressureChart"></div>
+        <span class="data-unit">hPa</span>
+      </div>
+
+      <!-- 水深卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">水深</span>
+          <div class="card-icon">📏</div>
+        </div>
+        <span class="data-value" id="depthValue">--</span>
+        <div class="chart-container-small" id="depthChart"></div>
+        <span class="data-unit">m</span>
+      </div>
+
+      <!-- 水温卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">水温</span>
+          <div class="card-icon">🌡️</div>
+        </div>
+        <span class="data-value" id="temperatureValue">--</span>
+        <div class="chart-container-small" id="temperatureChart"></div>
+        <span class="data-unit">°C</span>
+      </div>
+    </div>
+
+    <!-- 中间轮播图区域 -->
+    <div class="center-panel">
+      <!-- LSTM图片轮播 -->
+      <div class="carousel-container">
+        <h3 class="card-title">LSTM预测结果</h3>
+        <div class="carousel" id="lstmCarousel">
+          <div class="carousel-slide active"><img src="/lstm/LSTM长势预测.png" alt="LSTM长势预测"></div>
+          <div class="carousel-slide"><img src="/lstm/出售价格预测.png" alt="出售价格预测"></div>
+        </div>
+        <div class="carousel-navigation">
+          <div class="carousel-dot active" data-index="0"></div>
+          <div class="carousel-dot" data-index="1"></div>
+        </div>
+      </div>
+
+      <!-- 鱼病图片轮播 -->
+      <div class="carousel-container">
+        <h3 class="card-title">鱼病诊断结果</h3>
+        <div class="carousel" id="fishDiseaseCarousel">
+          <div class="carousel-slide active"><img src="/鱼病/image1.jpg" alt="鱼病图片1"></div>
+          <div class="carousel-slide"><img src="/鱼病/image2.jpg" alt="鱼病图片2"></div>
+          <div class="carousel-slide"><img src="/鱼病/image3.jpg" alt="鱼病图片3"></div>
+        </div>
+        <div class="carousel-navigation">
+          <div class="carousel-dot active" data-index="0"></div>
+          <div class="carousel-dot" data-index="1"></div>
+          <div class="carousel-dot" data-index="2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧数据面板 -->
+    <div class="right-panel">
+      <!-- 风速卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">风速</span>
+          <div class="card-icon">💨</div>
+        </div>
+        <span class="data-value" id="windSpeedValue">--</span>
+        <div class="chart-container-small" id="windSpeedChart"></div>
+        <span class="data-unit">m/s</span>
+      </div>
+
+      <!-- 距离卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">距离</span>
+          <div class="card-icon">📏</div>
+        </div>
+        <span class="data-value" id="distanceValue">--</span>
+        <div class="chart-container-small" id="distanceChart"></div>
+        <span class="data-unit">cm</span>
+      </div>
+
+      <!-- 盐度卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">盐度</span>
+          <div class="card-icon">🧂</div>
+        </div>
+        <span class="data-value" id="salinityValue">--</span>
+        <div class="chart-container-small" id="salinityChart"></div>
+        <span class="data-unit">‰</span>
+      </div>
+    </div>
+
+    <!-- 底部图表区域 -->
+    <div class="bottom-panel">
+      <!-- PH折线图 -->
+      <div class="chart-card">
+        <div class="card-header">
+          <span class="card-title">PH值变化</span>
+        </div>
+        <div class="chart-container" id="phChart"></div>
+      </div>
+
+      <!-- 渔区占比饼图 -->
+      <div class="chart-card">
+        <div class="card-header">
+          <span class="card-title">渔区占比</span>
+        </div>
+        <div class="chart-container" id="fishingAreaChart"></div>
+      </div>
+
+      <!-- 患病鱼比例饼图 -->
+      <div class="chart-card">
+        <div class="card-header">
+          <span class="card-title">患病鱼比例</span>
+        </div>
+        <div class="chart-container" id="fishHealthChart"></div>
+      </div>
+
+      <!-- 风速折线图 -->
+      <div class="chart-card">
+        <div class="card-header">
+          <span class="card-title">风速趋势</span>
+        </div>
+        <div class="chart-container" id="windSpeedChartBottom"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 初始化所有图表
+    const charts = {
+      pressure: echarts.init(document.getElementById('pressureChart')),
+      depth: echarts.init(document.getElementById('depthChart')),
+      temperature: echarts.init(document.getElementById('temperatureChart')),
+      wind_speed: echarts.init(document.getElementById('windSpeedChart')),
+      salinity: echarts.init(document.getElementById('salinityChart')),
+      distance: echarts.init(document.getElementById('distanceChart')),
+      ph: echarts.init(document.getElementById('phChart')),
+      fishingArea: echarts.init(document.getElementById('fishingAreaChart')),
+      fishHealth: echarts.init(document.getElementById('fishHealthChart')),
+      windSpeedBottom: echarts.init(document.getElementById('windSpeedChartBottom'))
+    };
+
+    // 图表主题样式
+    const chartTheme = {
+      backgroundColor: 'transparent',
+      textStyle: { color: '#F8FAFC' },
+      title: { textStyle: { color: '#94A3B8' } },
+      tooltip: {
+        backgroundColor: 'rgba(30, 41, 59, 0.8)',
+        borderColor: '#165DFF',
+        textStyle: { color: '#F8FAFC' }
+      },
+      legend: { show: false },
+      grid: { borderColor: 'transparent' },
+      xAxis: { show: false },
+      yAxis: { show: false }
+    };
+
+    // 风速折线图配置
+    const windSpeedOption = {
+      ...chartTheme,
+      tooltip: { trigger: 'axis' },
+      series: [{ data: [], type: 'line', smooth: true, itemStyle: { color: '#165DFF' }, lineStyle: { width: 2 } }]
+    };
+
+    // PH值折线图配置
+    const phOption = {
+      ...chartTheme,
+      tooltip: { trigger: 'axis' },
+      series: [{
+        data: [],
+        type: 'line',
+        smooth: true,
+        itemStyle: {
+          color: params => params.value > 7 ? '#FBBF24' : '#EF4444'
+        },
+        lineStyle: { width: 2 }
+      }]
+    };
+
+    // 初始化图表配置
+    ['pressure', 'depth', 'temperature', 'wind_speed', 'salinity', 'distance'].forEach(key => {
+      if (charts[key]) {
+        charts[key].setOption(getLineChartOption());
+      }
+    });
+
+    function getLineChartOption() {
+      return {
+        grid: { top: 10, right: 10, left: 0, bottom: 20 },
+        tooltip: { type: 'line', trigger: 'axis' },
+        xAxis: { type: 'category', show: false },
+        yAxis: { type: 'value', boundaryGap: [0, '30%'], splitLine: { lineStyle: { color: '#334155' } } },
+        series: [{
+          data: [],
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          areaStyle: {
+            color: {
+              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
+                { offset: 1, color: 'rgba(59, 130, 246, 0)' }
+              ]
+            }
+          },
+          lineStyle: { color: 'rgba(59, 130, 246, 1)', width: 2 }
+        }]
+      };
+    }
+
+    // 更新传感器数据显示
+    function updateValues(data) {
+      const elements = {
+        pressure: 'pressureValue',
+        depth: 'depthValue',
+        temperature: 'temperatureValue',
+        wind_speed: 'windSpeedValue',
+        salinity: 'salinityValue',
+        ph: 'ph',
+        distance: 'distanceValue'
+      };
+
+      for (const [key, id] of Object.entries(elements)) {
+        const element = document.getElementById(id);
+        if (element) {
+          let value = data[key];
+          if (value === undefined && data.history?.[key]?.length > 0) {
+            value = data.history[key][data.history[key].length - 1];
+          }
+          if (value !== undefined) {
+            element.textContent = value.toFixed(1);
+          }
+        }
+      }
+
+      // 更新图表
+      if (data.history?.wind_speed?.length > 0) {
+        const latestWindSpeed = data.history.wind_speed[data.history.wind_speed.length - 1];
+        const timeStr = new Date().toLocaleTimeString();
+        if (windSpeedOption.xAxis.data.length > 20) {
+          windSpeedOption.xAxis.data.shift();
+          windSpeedOption.series[0].data.shift();
+        }
+        windSpeedOption.xAxis.data.push(timeStr);
+        windSpeedOption.series[0].data.push(latestWindSpeed);
+        charts.wind_speed.setOption(windSpeedOption);
+      }
+
+      if (data.history?.ph?.length > 0) {
+        const latestPh = data.history.ph[data.history.ph.length - 1];
+        const timeStr = new Date().toLocaleTimeString();
+        if (phOption.xAxis.data.length > 20) {
+          phOption.xAxis.data.shift();
+          phOption.series[0].data.shift();
+        }
+        phOption.xAxis.data.push(timeStr);
+        phOption.series[0].data.push(latestPh);
+        charts.ph.setOption(phOption);
+      }
+    }
+
+    // 连接SocketIO服务器
+    const socket = io();
+    socket.on('initial_data', (data) => {
+      console.log('初始数据:', data);
+      updateValues(data);
+    });
+
+    socket.on('sensor_update', function (data) {
+      console.log('接收到数据更新:', data);
+      updateValues(data);
+    });
+
+    // 图片轮播功能（略，可参考原逻辑）
+  </script>
+</body>
+</html>
